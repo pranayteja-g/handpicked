@@ -9,11 +9,17 @@ export type ProbeResult = {
 
 const SB_URL = (import.meta.env.VITE_SUPABASE_URL as string | undefined)?.replace(/\/$/, "");
 const SB_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
-const PROXY = (import.meta.env.VITE_PROXY_URL as string | undefined)?.replace(/\/$/, "");
+const PROXY_RAW = (import.meta.env.VITE_PROXY_URL as string | undefined)?.replace(/\/$/, "");
+const PROXY = PROXY_RAW && /^https?:\/\//.test(PROXY_RAW) ? PROXY_RAW : undefined;
 
 const TIMEOUT_MS = 10000;
 
-async function timedFetch(name: string, url: string, init: RequestInit = {}, anyReply = false): Promise<ProbeResult> {
+async function timedFetch(
+  name: string,
+  url: string,
+  init: RequestInit = {},
+  anyReply = false,
+): Promise<ProbeResult> {
   const t0 = performance.now();
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), TIMEOUT_MS);
@@ -100,8 +106,8 @@ export async function runAll(): Promise<ProbeResult[]> {
   if (PROXY && SB_KEY) {
     const h = { apikey: SB_KEY };
     jobs.push(timedFetch("proxy: auth health", `${PROXY}/auth/v1/health`, { headers: h }));
-    jobs.push(timedFetch("proxy: REST", `${PROXY}/rest/v1/`, { headers: h }));
     jobs.push(timedFetch("proxy: REST", `${PROXY}/rest/v1/`, { headers: h }, true));
+    jobs.push(wsProbe("proxy: realtime WS", PROXY));
   }
 
   return Promise.all(jobs);
